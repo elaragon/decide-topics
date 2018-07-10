@@ -10,9 +10,9 @@ To overcome these problems, this interactive system combines two modules to disc
 - **Topics**: The alternative web interface starts with a query form to force users to explicitly set their interest. Then, matching petitions are retrieved and then grouped into topics with the text clustering method [Carrot2](http://search.carrot2.org/stable/search). Resulting topics are presented in a mosaic plot as polygons (sized by the sum of the number of votes).
 - **Petitions**: Once a topic is selected, corresponding petitions are shown as circles (sized by the number of votes).
 
-More info about this tool can be found at [
-Aragón, P., Bermejo, Y., Gómez, V., & Kaltenbrunner, A. (2018). Interactive Discovery System for Direct Democracy. Advances in Social Networks Analysis and Mining (ASONAM). Barcelona, Spain.
-]() 
+More info about this tool can be found at:
+- [Aragón, P., Bermejo, Y., Gómez, V., & Kaltenbrunner, A. (2018). Interactive Discovery System for Direct Democracy. Advances in Social Networks Analysis and Mining (ASONAM). Barcelona, Spain.]()
+- [Aragón, P. (2017). Datos para la participación. Un año en un día. Madrid, Spain.](https://www.youtube.com/watch?v=aXcF2zg3eVc&t=1s)
 
 ![alt text](https://raw.githubusercontent.com/elaragon/decide-topics/master/img/topics.png)
 ![alt text](https://raw.githubusercontent.com/elaragon/decide-topics/master/img/petitions.png)
