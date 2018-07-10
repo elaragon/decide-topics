@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <meta content="IE=edge" http-equiv="X-UA-Compatible">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <meta content="" name="description">
+    <meta content="" name="author">
+
+    <script language="javascript" type="text/javascript" src="./js/jquery.min.js"></script>
+    <script language="javascript" type="text/javascript" src="./js/d3.v3.min.js"></script>
+    <script language="javascript" type="text/javascript" src="./js/ConvexHull.js"></script>
+    <script language="javascript" type="text/javascript" src="./js/PowerDiagram.js"></script>
+    <script language="javascript" type="text/javascript" src="./js/VoronoiTreemap.js"></script>
+    <script language="javascript" type="text/javascript" src="./js/VoronoiTreemapD3.js"></script>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet">
+    <link href="./style.css" rel="stylesheet">
+
+    <title>Decide clusters</title>
+
+</head>
+
+<body>
+	
+	<div class="container">
+		<form>
+			<h2>Welcome to <a href="https://decide.madrid.es/proposals/" target="_blank">Decide Madrid</a> | What are you looking for?</h2>
+			<h5>Tool by <a href="https://elaragon.wordpress.com" target="_blank">@elaragon</a> (<a href="https://eurecat.org/en/" target="_blank">Eurecat</a>) for <a href="http://medialab-prado.es/participa-lab" target="_blank">Participa Lab</a></h5><label class="sr-only" for="textsearch"></label> <input class="form-control" id="textsearch" onsubmit="paint_treemap();" required="" value="basuras"><br>
+			<button class="btn btn-lg btn-warning btn-block" id="submit" type="button">Search!</button>
+		</form>
+	</div>
+
+    <div class="container" id="title"></div>
+    <div class="container" id="container"></div>
+
+    <script type="text/javascript">
+
+    	var locked = false;
+        var stopwords = readTextFile('./stopwords.txt').split('\n');
+
+        $('#textsearch').keypress(function(e) {        	
+        	if (e.which == 13) {
+        		if (!locked) {
+        			locked = true;
+	        		e.preventDefault();
+		        	$("#container").html("");
+	    	    	$("#container").append('<div class="col-sm-3" id="legend"></div><div class="col-sm-8" id="dataviz"></div>');
+	        		paint_treemap();
+        		}
+        	}
+        });
+        $("#submit").click(function() {
+        	if (!locked) {
+        		locked = true;
+	        	$("#container").html("");
+	        	$("#container").append('<div class="col-sm-3" id="legend"></div><div class="col-sm-8" id="dataviz"></div>');
+	        	paint_treemap();
+        	}
+        });
+
+        function paint_treemap() {
+        	var docs = [];
+        	$("#title").html("");
+        	$("#dataviz").html("");
+        	$("#legend").html("");
+        	$.ajax({
+        		url: "http://" + window.location.host + "/solr/proposals/clustering?rows=1000&sort=created_at%20desc&indent=on&wt=json&df=_text_&fl=title,id,cached_votes_up&stats=true&stats.field=cached_votes_up&q=" + $("#textsearch").val(),
+        		type: 'GET',
+        		contentType: 'Content-type: text/plain; charset=utf-8',
+        		beforeSend: function(jqXHR) {
+        			jqXHR.overrideMimeType('text/html;charset=utf-8');
+        		},
+        		dataType: 'json',
+        		cache: false,
+        		success: function(source) {
+
+        			var docs = source['response']['docs'];
+
+        			if (docs.length==0) $("#title").append("<h3>No results were found</h3>");
+
+        			else {
+
+	        			$("#title").append("<h3>Topics</h3>");
+	        			var clusters_solr = source['clusters'];
+	        			var max_cached_votes_up = source["stats"]["stats_fields"]["cached_votes_up"]["max"];
+
+	        			var cluster_dataset = {"children": []};       			
+	        			var clusters_map = new Object();
+	        			var clusters_labels = [];        			
+	        			
+	        			var docs_map = {};
+	        			for (i = 0; i < docs.length; i++) {
+	        				docs_map[docs[i]["id"]] = {
+	        					"name": docs[i]["title"],
+	        					"size": docs[i]["cached_votes_up"],
+	        					"id": docs[i]["id"]
+	        				};
+	        			}
+	        			
+	        			for (i = 0; i < clusters_solr.length; i++) {
+	        				var obj = clusters_solr[i];
+	        				label = obj['labels'][0];
+                            if ((!label.includes("Strong"))&&(stopwords.indexOf(label.toLowerCase())==-1)) {
+    	        				clusters_labels.push(label);
+    	        				label_docs = obj['docs'];
+    	        				for (var j = 0; j < label_docs.length; j++) {
+    	        					clusters_map[label_docs[j]] = label;
+    	        				}
+    	        				proposals = [];
+    	        				supports = 0;
+    	        				for (var j = 0; j < obj["docs"].length; j++) {
+    	        					proposals.push(docs_map[obj["docs"][j]]);
+    	        					supports = supports + docs_map[obj["docs"][j]].size;
+    	        				}
+    	        				if (label!="Other Topics") {
+    		        				cluster_dataset["children"].push({
+    		        					"name": label,
+    		        					"cluster": label,
+    		        					"size": supports,
+    		        					"n_proposals": obj["docs"].length
+    		        				});
+    	        				}
+    	        				cluster_dataset[label] = proposals;
+                            }
+	        			}
+
+	        			var width = parseInt($("#container").width()),
+	        				height = Math.ceil((width * 9) / 16),
+	        				padding = 1.5, // separation between same-color circles
+	        				clusterPadding = 6, // separation between different-color circles
+	        				maxRadius = 12;
+	        			
+	        			var n = docs.length, // total number of circles
+	        				m = clusters_solr.length; // number of distinct clusters
+	        			
+	        			var color = d3.scale.category20().domain(d3.range(m));
+	        			
+	        			var svglegend = d3.select("#legend").append("svg").attr("width", width * 2 / 10).attr("height", clusters_solr.length * 20);
+	        			
+	        			//D3 Vertical Legend//////////////////////////
+	        			var legend = svglegend.selectAll('#legend').data(clusters_labels).enter().append('g').attr("class", "legends").attr("id", function(d) {
+	        				return ((""+d).replace(/ /g , ""));
+	        			}).attr("transform", function(d, i) {
+	        				{
+	        					return "translate(0," + (10 + i * 20) + ")"
+	        				}
+	        			}).on("click", function(d) {
+                                $("#tooltip").remove();
+	        					$("#voronoitreemap").remove();
+	        					$(".legends").each(function() {
+	        						if ($(this).text() != d) $(this).remove();
+	        						else {
+	        							$(this).attr("transform","translate(0,0)").removeAttr("transform");
+	        						}
+	        					});
+	        					paint_bubbles(d, cluster_dataset[d]);
+	        				}).on("mouseover", function(d) {
+	        					div.transition().duration(200).style("opacity", .9);
+	        					div.html("<strong>" + d + "</strong>").style("left", (d3.event.pageX) + "px").style("top", (d3.event.pageY - 28) + "px");
+	        					$("path").each(function() {
+	        						if ($(this).attr("id") != ("path-"+d).replace(/ /g , "")) $(this).attr("opacity", 0.1);
+	        					});        					
+	        					//$(("#path-"+d).replace(/ /g , "")).attr("fill", "white");
+	        			}).on("mouseout", function(d) {
+	        					div.transition().duration(500).style("opacity", 0);
+	        					$("path").each(function() {
+	        						if ($(this).attr("id") != ("path-"+d).replace(/ /g , "")) $(this).attr("opacity", 1);
+	        					});         					
+	        					//$(("#path-"+d).replace(/ /g , "")).attr("fill", color(d));
+	        			});
+	        			legend.append('rect').attr("x", 0).attr("y", 0).attr("width", 10).attr("height", 10).style("fill", function(d, i) {
+	        				return color(d)
+	        			})
+	        			legend.append('text').attr("x", 20).attr("y", 10).attr("fill", "#eee")
+	        				//.attr("dy", ".35em")
+	        				.text(function(d, i) {
+	        					return d
+	        				}).attr("class", "textselected").style("font-size", "1vw")
+	        			var border = 10;
+	        			var div = d3.select("#container").append("div").attr("class", "tooltip").style("opacity", 0).attr("id", "tooltip");
+	        			var infodiv = d3.select("#container").append("h6").attr("class", "infoviz").html('<a href="http://cse512-14w.github.io/fp-plvines-djpeter/" target="_blank">Voronoi treemap</a> of topics sized by cumulative support count, please check the info on mouse over and explore the proposals with a click');
+	        			var svg_container = d3.select("#container").append("svg").attr("width", width * 7 / 10).attr("height", height).attr("id", "voronoitreemap");
+	        			compute_polygon();
+       			    	locked = false;
+	        		}
+
+        			function get_selected_polygon() {
+        				var width_less_border = width * 0.7 - 2 * border;
+        				var height_less_border = height * 0.8 - 2 * border;
+        				var entire_svg_polygon = [
+        					[border, border],
+        					[border, height_less_border],
+        					[width_less_border, height_less_border],
+        					[width_less_border, border]
+        				];
+        				return entire_svg_polygon;
+        			}
+
+        			function get_selected_dataset() {
+        				return clusters_json;
+        			}
+
+        			function make_d3_poly(d) {
+        				return "M" + d.join("L") + "Z";
+        			}
+
+        			function openInNewTab(url) {
+        				var win = window.open(url, '_blank');
+        				win.focus();
+        			}
+
+        			function compute_polygon() {
+        				var select_polygon = get_selected_polygon();
+        				var vt = d3.layout.voronoitreemap().root_polygon(select_polygon).value(function(d) {
+        					return d.size;
+        				}).iterations(100);
+        				nodes = vt(cluster_dataset);
+        				svg_container.selectAll("path").remove();
+        				var background_color = "none";
+        				svg_container.append("g").append("rect").attr("x", 0).attr("y", 0).attr("width", width).attr("height", height).attr("fill", background_color);
+        				var color_func = function(d) {
+        					return color(d.cluster);
+        				};
+        				// consolidate and draw polygons
+        				var selected_node_list = [];
+        				for (var i = 0; i < nodes.length; i++) {
+        					var node = nodes[i];
+        					if (node.polygon != null && node.depth <= max_depth) {
+        						selected_node_list.push(node);
+        					}
+        				}
+        				var polylines = svg_container.append("g").selectAll("path").data(selected_node_list);
+        				polylines.enter().append("path").attr("d", function(d) {
+        					return make_d3_poly(d.polygon);
+        				}).attr("stroke-width", "3px").attr("stroke", "white").attr("fill", color_func).attr("id", function(d) {
+        					return ("path-"+d.name).replace(/ /g , "");
+        				});
+        				polylines.on("click", function(d) {
+        					$("#tooltip").remove();
+        					$("#voronoitreemap").remove();
+        					$(".legends").each(function() {
+        						if ($(this).text() != d.name) $(this).remove();
+        						else {
+        							$(this).attr("transform","translate(0,0)").removeAttr("transform");
+        						}
+        					});
+        					paint_bubbles(d.name, cluster_dataset[d.name]);
+        				}).on("mouseover", function(d) {
+        					div.transition().duration(200).style("opacity", .9);
+        					div.html("<strong>" + d.name + "</strong><br>" + d.n_proposals + " proposals<br>" + d.size + " support count").style("left", (d3.event.pageX) + "px").style("top", (d3.event.pageY - 28) + "px");
+        				}).on("mouseout", function(d) {
+        					div.transition().duration(500).style("opacity", 0);
+        				});
+        				polylines.exit().remove();
+        			}
+
+        			function paint_bubbles(cluster_selected, proposals) {
+        				var clusters = new Array(m);
+        				var nodes = d3.range(proposals.length).map(function(i) {
+        					var doc = proposals[i];
+        					var c = cluster_selected;
+        					var r = 25 + 150 * doc["size"] / max_cached_votes_up,
+        						u = "https://decide.madrid.es/proposals/" + doc["id"],
+        						t = doc["name"],
+        						v = doc["size"],
+        						node = {
+        							cluster: c,
+        							radius: r,
+        							url: u,
+        							title: t,
+        							votes: v
+        						};
+        					if (!clusters[c] || (r > clusters[c].radius)) clusters[c] = node;
+        					return node;
+        				});
+        				var force = d3.layout.force().nodes(nodes).size([width * 7 / 10, width * 4 / 10]).gravity(.02).charge(0).on("tick", tick).start();
+        				// Define the div for the tooltip
+        				var div = d3.select("#container").append("div").attr("class", "tooltip").style("opacity", 0);
+	        			var infodiv = d3.select(".infoviz").html('<a href="https://bl.ocks.org/mbostock/7882658" target="_blank">Bubble viz</a> of proposals sized by support count, please check the info on mouse over and go to the proposal with a click');
+        				var svg = d3.select("#container").append("svg").attr("width", width * 7 / 10).attr("height", height);
+        				var circle = svg.selectAll("circle").data(nodes).enter().append("circle").style("fill", function(d) {
+        					return color(d.cluster);
+        				}).call(force.drag).on("click", function(d) {
+        					openInNewTab(d.url);
+        				}).on("mouseover", function(d) {
+        					div.transition().duration(200).style("opacity", .9);
+        					div.html("<strong>" + d.title + "</strong><br/>" + Math.round(d.votes) + " support count").style("left", (d3.event.pageX) + "px").style("top", (d3.event.pageY - 28) + "px");
+        				}).on("mouseout", function(d) {
+        					div.transition().duration(500).style("opacity", 0);
+        				});
+
+
+	        			circle.transition().duration(2000).delay(function(d, i) { return i * 5; }).attrTween("r", function(d) {
+	        				var i = d3.interpolate(0, d.radius);
+	        				return function(t) { return d.radius = i(t); };
+	        			});
+
+
+        				function tick(e) {
+        					circle.each(cluster(10 * e.alpha * e.alpha)).each(collide(.5)).attr("cx", function(d) {
+        						return d.x;
+        					}).attr("cy", function(d) {
+        						return d.y;
+        					});
+        				}
+
+        				// Move d to be adjacent to the cluster node.
+        				function cluster(alpha) {
+        					return function(d) {
+        						var cluster = clusters[d.cluster];
+        						if (cluster === d) return;
+        						var x = d.x - cluster.x,
+        							y = d.y - cluster.y,
+        							l = Math.sqrt(x * x + y * y),
+        							r = d.radius + cluster.radius;
+        						if (l != r) {
+        							l = (l - r) / l * alpha;
+        							d.x -= x *= l;
+        							d.y -= y *= l;
+        							cluster.x += x;
+        							cluster.y += y;
+        						}
+        					};
+        				}
+        				// Resolves collisions between d and all other circles.
+        				function collide(alpha) {
+        					var quadtree = d3.geom.quadtree(nodes);
+        					return function(d) {
+        						var r = d.radius + maxRadius + Math.max(padding, clusterPadding),
+        							nx1 = d.x - r,
+        							nx2 = d.x + r,
+        							ny1 = d.y - r,
+        							ny2 = d.y + r;
+        						quadtree.visit(function(quad, x1, y1, x2, y2) {
+        							if (quad.point && (quad.point !== d)) {
+        								var x = d.x - quad.point.x,
+        									y = d.y - quad.point.y,
+        									l = Math.sqrt(x * x + y * y),
+        									r = d.radius + quad.point.radius + (d.cluster === quad.point.cluster ? padding : clusterPadding);
+        								if (l < r) {
+        									l = (l - r) / l * alpha;
+        									d.x -= x *= l;
+        									d.y -= y *= l;
+        									quad.point.x += x;
+        									quad.point.y += y;
+        								}
+        							}
+        							return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+        						});
+        					};
+        				}
+        			}
+        		},
+        		error: function() {
+        			console.log("error");
+        		}
+        	});
+        };
+
+        function readTextFile(file) {
+            var rawFile = new XMLHttpRequest();
+            var text = "";
+            rawFile.open("GET", file, false);
+            rawFile.onreadystatechange = function ()
+            {
+                if(rawFile.readyState === 4)
+                {
+                    if(rawFile.status === 200 || rawFile.status == 0)
+                    {
+                        text = text + rawFile.responseText;
+                    }
+                }
+            }
+            rawFile.send(null);
+            return text;
+        }       
+
+    </script>
+
+</body>
+
+</html>

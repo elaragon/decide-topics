@@ -1,0 +1,45 @@
+body {
+  padding-top: 40px;
+  padding-bottom: 40px;
+  background-color: #000;
+  background: url('./img/background.jpg');
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-position: center;
+  color: black;
+}
+button{
+  font-weight: bold;
+}
+h2 {
+  color:white;  
+}
+h3 {
+  color:white;  
+}
+h5 {
+  color:white;  
+  text-align: right;
+}
+h6.infoviz {
+  color:white;  
+}
+a {
+  color:#FFDEAD;  
+}
+a:hover { 
+    background-color: #FFDEAD;
+}
+.legend{
+ margin-top: 10px;
+}
+div.tooltip {
+  position: absolute;
+  text-align: center;
+  padding: 2px;
+  font: 12px sans-serif;
+  background: white;
+  border: 0px;
+  border-radius: 8px;
+  pointer-events: none;
+}
