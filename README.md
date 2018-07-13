@@ -11,7 +11,7 @@ To overcome these problems, this interactive system combines two modules to disc
 - **Petitions**: Once a topic is selected, corresponding petitions are shown as circles (sized by the number of votes).
 
 More info about this tool can be found at:
-- [Aragón, P., Bermejo, Y., Gómez, V., & Kaltenbrunner, A. (2018). Interactive Discovery System for Direct Democracy. Advances in Social Networks Analysis and Mining (ASONAM). Barcelona, Spain.]()
+- [Aragón, P., Bermejo, Y., Gómez, V., & Kaltenbrunner, A. (2018). Interactive Discovery System for Direct Democracy. Advances in Social Networks Analysis and Mining (ASONAM). Barcelona, Spain.](https://arxiv.org/pdf/1807.04448)
 - [Aragón, P. (2017). Datos para la participación. Un año en un día. Madrid, Spain.](https://www.youtube.com/watch?v=aXcF2zg3eVc&t=1s)
 
 ![alt text](https://raw.githubusercontent.com/elaragon/decide-topics/master/img/topics.png)
